@@ -61,7 +61,11 @@ export class Movie extends BaseTable {
   dislikeCount: number;
 
   @Column()
-  @Transform(({ value }) => `http://localhost:3000/${value}`)
+  @Transform(({ value }) =>
+    process.env.ENV === 'prod'
+      ? `http://${process.env.BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${value}`
+      : `http://localhost:3000/${value}`,
+  )
   movieFilePath: string;
 
   @OneToMany(() => MovieUserLike, (mul) => mul.movie)

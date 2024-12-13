@@ -1,0 +1,53 @@
+name: Deploy to AWS Elastic Beanstalk # 이름
+
+on: # master브랜치가 push 될 때 마다 밑에 jobs 실행
+  push:
+    branches:
+      - master
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest # 우분투 최신환경에서 빌드한다.
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3 # 깃헙에 최신코드를 가져온다
+
+      - name: Set Up NodeJS
+        uses: actions/setup-node@v3 # 자동으로 nodejs 설치
+        with:
+          node-version: '18'
+
+      - name: Install Dependencies # 의존성 패키지 설치
+        run: npm i
+
+      - name: Build Project
+        run: npm run build # 빌드
+
+      - name: Zip Artifact For Deployment
+        run: zip -r deploy.zip . # 모든파일을 depoly.zip 으로 만듬
+
+      - name: Upload To S3
+        env: # 깃헙에 secret 설정해놓은거 가져옴
+          AWS_ACCESS_KEY_ID: ${{secrets.AWS_ACCESS_KEY_ID}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+          AWS_REGION: ${{secrets.AWS_REGION}}
+        run: | # S3에 zip파일 업로드
+          aws configure set region $AWS_REGION 
+          aws s3 cp deploy.zip s3://nestjs-netflix-practice/deploy.zip
+
+      - name: Deploy To AWS Elastic Beanstalk # AEB에 업로드
+        env:
+          AWS_ACCESS_KEY_ID: ${{secrets.AWS_ACCESS_KEY_ID}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+          AWS_REGION: ${{secrets.AWS_REGION}}
+        run: | # AEB 실행
+          aws elasticbeanstalk create-application-version \
+            --application-name "NestJS-github-real" \
+            --version-label $GITHUB_SHA \
+            --source-bundle S3Bucket="nestjs-netflix-practice",S3Key="deploy.zip"
+
+          aws elasticbeanstalk update-environment \
+            --application-name "NestJS-github-real" \
+            --environment-name "NestJS-github-real-env" \
+            --version-label $GITHUB_SHA

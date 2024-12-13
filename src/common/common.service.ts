@@ -1,11 +1,75 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { SelectQueryBuilder } from 'typeorm';
 import { PagePaginationDto } from './dto/page-pagination.dto';
 import { CursorPaginationDto } from './dto/cursor-pagination.dto';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { ObjectCannedACL, PutObjectCommand, S3 } from '@aws-sdk/client-s3';
+import { v4 as Uuid } from 'uuid';
+import { ConfigService } from '@nestjs/config';
+import { envVariableKeys } from './const/env.const';
 
 @Injectable()
 export class CommonService {
-  constuctor() {}
+  private s3: S3;
+
+  constructor(private readonly configService: ConfigService) {
+    this.s3 = new S3({
+      credentials: {
+        accessKeyId: configService.get<string>(envVariableKeys.awsAccessKeyId),
+        secretAccessKey: configService.get<string>(
+          envVariableKeys.awsSecretAccessKey,
+        ),
+      },
+
+      region: configService.get<string>(envVariableKeys.awsRegion),
+    });
+  }
+
+  async saveMovieToPermanentStorage(fileName: string) {
+    try {
+      const bucketName = this.configService.get<string>(
+        envVariableKeys.bucketName,
+      );
+      await this.s3.copyObject({
+        Bucket: bucketName,
+        CopySource: `${bucketName}/public/temp/${fileName}`,
+        Key: `public/movie.${fileName}`,
+        ACL: 'public-read',
+      });
+
+      await this.s3.deleteObject({
+        Bucket: bucketName,
+        Key: `public/temp/${fileName}`,
+      });
+    } catch (error) {
+      console.log(error);
+      throw new InternalServerErrorException('S3 에러');
+    }
+  }
+
+  async createPresignedUrl(expiresIn = 300) {
+    // 'nestjs-netflix-practice/movie/vidoe.mp4' 이런식으로 key가 붙음
+    const params = {
+      Bucket: this.configService.get<string>(envVariableKeys.bucketName),
+      Key: `public/temp/${Uuid()}.png`, // temp에 저장
+      ACL: ObjectCannedACL.public_read, // 아무나 읽을 수 있음
+    };
+
+    try {
+      const url = await getSignedUrl(this.s3, new PutObjectCommand(params), {
+        expiresIn,
+      }); // promise로 presignedUrl 생성
+
+      return url;
+    } catch (error) {
+      console.log(error);
+      throw new InternalServerErrorException('S3 Presigned URL 생설 실패');
+    }
+  }
 
   applyPagePaginationParamToQb<T>(
     qb: SelectQueryBuilder<T>,

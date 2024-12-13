@@ -49,6 +49,10 @@ import * as winston from 'winston';
         HASH_ROUNDS: Joi.number().required(),
         ACCESS_TOKEN_SECRET: Joi.string().required(),
         REFRESH_TOKEN_SECRET: Joi.string().required(),
+        AWS_SECRET_ACCESS_KEY: Joi.string().required(),
+        AWS_ACCESS_KEY_ID: Joi.string().required(),
+        AWS_REGION: Joi.string().required(),
+        BUCKET_NAME: Joi.string().required(),
       }),
     }),
     TypeOrmModule.forRootAsync({
@@ -60,7 +64,16 @@ import * as winston from 'winston';
         password: configService.get<string>(envVariableKeys.dbPassword),
         database: configService.get<string>(envVariableKeys.dbDatabase),
         entities: [Movie, MovieDetail, Director, Genre, User, MovieUserLike],
-        synchronize: true,
+        synchronize:
+          configService.get<string>(envVariableKeys.env) === 'prod'
+            ? false
+            : true,
+        ...(configService.get<string>(envVariableKeys.env) === 'prod' &&
+          {
+            // ssl: {
+            //   rejectUnauthorized: false, // SSL 인증서를 검증하지 않도록 설정해 두었는데, 이는 로컬 개발 환경이나 테스트 환경에서 자주 사용
+            // },
+          }),
       }),
       inject: [ConfigService],
     }),
