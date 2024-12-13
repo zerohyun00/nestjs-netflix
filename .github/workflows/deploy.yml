@@ -87,7 +87,7 @@ jobs:
       - name: Create Folders
         run: |
           mkdir -p ./public/movie
-          mkidr -p ./public/temp
+          mkdir -p ./public/temp
 
       - name: Install Dependencies # 의존성 패키지 설치
         run: npm i
